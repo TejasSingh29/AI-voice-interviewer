@@ -12,69 +12,88 @@ export default function LoginPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!form.email || !form.password) {
+      return toast.error("Please fill in all fields");
+    }
     setLoading(true);
     try {
-      await login(form.email, form.password);
+      await login(form.email.trim(), form.password);
+      toast.success("Welcome back!");
       navigate("/dashboard");
     } catch (err) {
-      toast.error(err.response?.data?.error || "Login failed");
+      const msg = err.response?.data?.error || "Login failed. Check your credentials.";
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4">
+    <div className="min-h-screen flex items-center justify-center px-4 bg-slate-950">
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="flex items-center gap-3 mb-8 justify-center">
-          <div className="w-10 h-10 rounded-xl bg-brand-500 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center">
             <Mic className="w-5 h-5 text-white" />
           </div>
-          <span className="text-xl font-semibold text-slate-100">VoicePrep AI</span>
+          <span className="text-xl font-semibold text-white">VoicePrep AI</span>
         </div>
 
-        <div className="card p-8">
-          <h1 className="text-2xl font-semibold mb-1">Welcome back</h1>
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8">
+          <h1 className="text-2xl font-semibold text-white mb-1">Welcome back</h1>
           <p className="text-slate-400 text-sm mb-6">Sign in to your account</p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="label">Email</label>
+              <label className="block text-sm font-medium text-slate-400 mb-1.5">
+                Email
+              </label>
               <input
                 type="email"
-                className="input"
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
                 placeholder="you@example.com"
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
                 required
+                autoComplete="email"
               />
             </div>
+
             <div>
-              <label className="label">Password</label>
+              <label className="block text-sm font-medium text-slate-400 mb-1.5">
+                Password
+              </label>
               <input
                 type="password"
-                className="input"
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
                 placeholder="••••••••"
                 value={form.password}
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
                 required
+                autoComplete="current-password"
               />
             </div>
 
-            <button type="submit" disabled={loading} className="btn-primary w-full flex items-center justify-center gap-2 mt-2">
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium px-6 py-3 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 mt-2"
+            >
               {loading ? (
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
               ) : (
                 <LogIn className="w-4 h-4" />
               )}
-              Sign In
+              {loading ? "Signing in..." : "Sign In"}
             </button>
           </form>
 
           <p className="text-center text-sm text-slate-400 mt-6">
             Don't have an account?{" "}
-            <Link to="/register" className="text-brand-400 hover:text-brand-300 font-medium">
+            <Link
+              to="/register"
+              className="text-indigo-400 hover:text-indigo-300 font-medium"
+            >
               Sign up
             </Link>
           </p>

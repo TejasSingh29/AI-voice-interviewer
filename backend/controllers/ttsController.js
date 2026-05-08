@@ -1,26 +1,29 @@
 const axios = require("axios");
-const openai = require("../config/openai");
+const OpenAI = require("openai");
 const multer = require("multer");
 const fs = require("fs");
-const path = require("path");
 
 const upload = multer({ dest: "uploads/", limits: { fileSize: 25 * 1024 * 1024 } });
 
+// Groq also supports Whisper for STT — free!
+const groqClient = new OpenAI({
+  apiKey: process.env.GROQ_API_KEY,
+  baseURL: "https://api.groq.com/openai/v1",
+});
+
 // ─── POST /api/tts/synthesize ─────────────────────────────────────────────
-// Convert text to speech using ElevenLabs
-const synthesizeSpeech = async (req, res, next) => {
+// ElevenLabs TTS (if key provided) otherwise return error → frontend uses browser TTS
+const synthesizeSpeech = async (req, res) => {
   try {
     const { text, voiceId } = req.body;
-
-    if (!text) {
-      return res.status(400).json({ error: "text is required" });
-    }
+    if (!text) return res.status(400).json({ error: "text is required" });
 
     const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
     const VOICE_ID = voiceId || process.env.ELEVENLABS_VOICE_ID || "21m00Tcm4TlvDq8ikWAM";
 
-    if (!ELEVENLABS_API_KEY) {
-      return res.status(400).json({ error: "ElevenLabs API key not configured" });
+    if (!ELEVENLABS_API_KEY || ELEVENLABS_API_KEY === "your-elevenlabs-api-key-here") {
+      // No ElevenLabs key — tell frontend to use browser TTS
+      return res.status(400).json({ error: "ElevenLabs not configured, use browser TTS" });
     }
 
     const response = await axios.post(
@@ -28,12 +31,7 @@ const synthesizeSpeech = async (req, res, next) => {
       {
         text,
         model_id: "eleven_monolingual_v1",
-        voice_settings: {
-          stability: 0.5,
-          similarity_boost: 0.75,
-          style: 0.0,
-          use_speaker_boost: true,
-        },
+        voice_settings: { stability: 0.5, similarity_boost: 0.75 },
       },
       {
         headers: {
@@ -45,70 +43,47 @@ const synthesizeSpeech = async (req, res, next) => {
       }
     );
 
-    res.set({
-      "Content-Type": "audio/mpeg",
-      "Content-Length": response.data.byteLength,
-    });
+    res.set({ "Content-Type": "audio/mpeg", "Content-Length": response.data.byteLength });
     res.send(Buffer.from(response.data));
   } catch (error) {
-    if (error.response?.status === 401) {
-      return res.status(401).json({ error: "Invalid ElevenLabs API key" });
-    }
-    if (error.response?.status === 422) {
-      return res.status(422).json({ error: "Invalid voice ID or text" });
-    }
-    next(error);
+    res.status(500).json({ error: "TTS failed: " + error.message });
   }
 };
 
 // ─── POST /api/tts/transcribe ─────────────────────────────────────────────
-// Convert audio to text using OpenAI Whisper
-const transcribeAudio = async (req, res, next) => {
+// Groq Whisper STT — free and very fast
+const transcribeAudio = async (req, res) => {
   let filePath = null;
   try {
-    if (!req.file) {
-      return res.status(400).json({ error: "Audio file is required" });
-    }
-
+    if (!req.file) return res.status(400).json({ error: "Audio file is required" });
     filePath = req.file.path;
 
-    const transcription = await openai.audio.transcriptions.create({
+    const transcription = await groqClient.audio.transcriptions.create({
       file: fs.createReadStream(filePath),
-      model: "whisper-1",
+      model: "whisper-large-v3",
       language: "en",
       response_format: "text",
     });
 
     res.json({ text: transcription });
   } catch (error) {
-    next(error);
+    console.error("❌ Transcribe error:", error.message);
+    res.status(500).json({ error: "Transcription failed: " + error.message });
   } finally {
-    // Cleanup uploaded file
-    if (filePath && fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
-    }
+    if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
   }
 };
 
 // ─── GET /api/tts/voices ──────────────────────────────────────────────────
-// List available ElevenLabs voices
-const getVoices = async (req, res, next) => {
-  try {
-    const response = await axios.get("https://api.elevenlabs.io/v1/voices", {
-      headers: { "xi-api-key": process.env.ELEVENLABS_API_KEY },
-    });
-
-    const voices = response.data.voices.map((v) => ({
-      id: v.voice_id,
-      name: v.name,
-      category: v.category,
-      description: v.labels,
-    }));
-
-    res.json({ voices });
-  } catch (error) {
-    next(error);
-  }
+const getVoices = async (req, res) => {
+  res.json({
+    voices: [
+      { id: "21m00Tcm4TlvDq8ikWAM", name: "Rachel", category: "premade" },
+      { id: "AZnzlk1XvdvUeBnXmlld", name: "Domi", category: "premade" },
+      { id: "EXAVITQu4vr4xnSDxMaL", name: "Bella", category: "premade" },
+      { id: "ErXwobaYiN019PkySvjV", name: "Antoni", category: "premade" },
+    ],
+  });
 };
 
 module.exports = { synthesizeSpeech, transcribeAudio, upload, getVoices };

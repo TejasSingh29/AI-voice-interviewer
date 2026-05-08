@@ -5,21 +5,19 @@ const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem("token"));
   const [loading, setLoading] = useState(true);
 
+  // On app load, verify stored token is still valid
   useEffect(() => {
     const initAuth = async () => {
       const storedToken = localStorage.getItem("token");
       if (storedToken) {
         try {
-          api.defaults.headers.Authorization = `Bearer ${storedToken}`;
           const { data } = await api.get("/auth/me");
           setUser(data.user);
-          setToken(storedToken);
         } catch {
+          // Token invalid/expired — clear it
           localStorage.removeItem("token");
-          setToken(null);
         }
       }
       setLoading(false);
@@ -27,33 +25,27 @@ export const AuthProvider = ({ children }) => {
     initAuth();
   }, []);
 
-  const login = async (email, password) => {
-    const { data } = await api.post("/auth/login", { email, password });
-    localStorage.setItem("token", data.token);
-    api.defaults.headers.Authorization = `Bearer ${data.token}`;
-    setUser(data.user);
-    setToken(data.token);
-    return data;
-  };
-
   const register = async (name, email, password) => {
     const { data } = await api.post("/auth/register", { name, email, password });
     localStorage.setItem("token", data.token);
-    api.defaults.headers.Authorization = `Bearer ${data.token}`;
     setUser(data.user);
-    setToken(data.token);
+    return data;
+  };
+
+  const login = async (email, password) => {
+    const { data } = await api.post("/auth/login", { email, password });
+    localStorage.setItem("token", data.token);
+    setUser(data.user);
     return data;
   };
 
   const logout = () => {
     localStorage.removeItem("token");
-    delete api.defaults.headers.Authorization;
     setUser(null);
-    setToken(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );

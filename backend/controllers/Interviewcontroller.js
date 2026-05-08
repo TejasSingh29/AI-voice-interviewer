@@ -1,4 +1,4 @@
-const openai = require("../config/openai");
+const groq = require("../config/openai");
 const Session = require("../models/Session");
 const User = require("../models/User");
 
@@ -23,16 +23,20 @@ Interview type: ${typeInstructions[interviewType]}
 Rules:
 1. Ask ONE focused question at a time. Never ask multiple questions in one message.
 2. Listen carefully to answers. Follow up if an answer is vague or incomplete.
-3. Acknowledge the candidate's answer briefly before asking the next question. Do NOT say "Great answer!" repeatedly — vary your acknowledgments.
+3. Acknowledge the candidate's answer briefly before asking the next question. Vary your acknowledgments.
 4. Keep your responses concise (2-4 sentences max for acknowledgment + next question).
 5. Adapt question difficulty based on how well the candidate is performing.
 6. Do NOT reveal scores or evaluation mid-interview.
-7. This is question ${questionCount + 1} of ${maxQuestions}. ${questionCount >= maxQuestions - 1 ? "This is the LAST question. After their answer, say: 'Thank you, that concludes our interview. Please click End Interview for your feedback.'" : ""}
+7. This is question ${questionCount + 1} of ${maxQuestions}. ${
+    questionCount >= maxQuestions - 1
+      ? "This is the LAST question. After their answer, say: 'Thank you, that concludes our interview. Please click End Interview for your feedback.'"
+      : ""
+  }
 8. Sound natural and conversational — like a real interviewer, not a robot.`;
 };
 
 // ─── POST /api/interview/start ────────────────────────────────────────────
-const startInterview = async (req, res, next) => {
+const startInterview = async (req, res) => {
   try {
     const { jobRole, difficulty = "intermediate", interviewType = "mixed", maxQuestions = 10 } = req.body;
 
@@ -40,7 +44,6 @@ const startInterview = async (req, res, next) => {
       return res.status(400).json({ error: "jobRole is required" });
     }
 
-    // Create session
     const session = await Session.create({
       user: req.user._id,
       jobRole,
@@ -50,16 +53,12 @@ const startInterview = async (req, res, next) => {
       transcript: [],
     });
 
-    // Update user's sessions
-    await User.findByIdAndUpdate(req.user._id, {
-      $push: { sessions: session._id },
-    });
+    await User.findByIdAndUpdate(req.user._id, { $push: { sessions: session._id } });
 
-    // Generate opening question
     const systemPrompt = buildSystemPrompt(jobRole, difficulty, interviewType, 0, maxQuestions);
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
+    const completion = await groq.chat.completions.create({
+      model: "llama-3.3-70b-versatile",
       messages: [
         { role: "system", content: systemPrompt },
         {
@@ -73,7 +72,6 @@ const startInterview = async (req, res, next) => {
 
     const aiMessage = completion.choices[0].message.content;
 
-    // Save to transcript
     session.transcript.push({ role: "assistant", content: aiMessage });
     session.questionCount = 1;
     await session.save();
@@ -85,12 +83,13 @@ const startInterview = async (req, res, next) => {
       maxQuestions,
     });
   } catch (error) {
-    next(error);
+    console.error("❌ Start interview error:", error.message);
+    res.status(500).json({ error: "Failed to start interview: " + error.message });
   }
 };
 
 // ─── POST /api/interview/respond ─────────────────────────────────────────
-const respondToInterview = async (req, res, next) => {
+const respondToInterview = async (req, res) => {
   try {
     const { sessionId, userMessage } = req.body;
 
@@ -100,18 +99,11 @@ const respondToInterview = async (req, res, next) => {
 
     const session = await Session.findOne({ _id: sessionId, user: req.user._id });
 
-    if (!session) {
-      return res.status(404).json({ error: "Session not found" });
-    }
+    if (!session) return res.status(404).json({ error: "Session not found" });
+    if (session.status !== "active") return res.status(400).json({ error: "Session is not active" });
 
-    if (session.status !== "active") {
-      return res.status(400).json({ error: "Session is not active" });
-    }
-
-    // Add user message to transcript
     session.transcript.push({ role: "user", content: userMessage });
 
-    // Build messages array for OpenAI (full conversation history)
     const systemPrompt = buildSystemPrompt(
       session.jobRole,
       session.difficulty,
@@ -125,8 +117,8 @@ const respondToInterview = async (req, res, next) => {
       ...session.transcript.map((t) => ({ role: t.role, content: t.content })),
     ];
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
+    const completion = await groq.chat.completions.create({
+      model: "llama-3.3-70b-versatile",
       messages,
       temperature: 0.7,
       max_tokens: 400,
@@ -134,7 +126,6 @@ const respondToInterview = async (req, res, next) => {
 
     const aiMessage = completion.choices[0].message.content;
 
-    // Save AI response to transcript
     session.transcript.push({ role: "assistant", content: aiMessage });
     session.questionCount += 1;
     await session.save();
@@ -148,47 +139,41 @@ const respondToInterview = async (req, res, next) => {
       isComplete,
     });
   } catch (error) {
-    next(error);
+    console.error("❌ Respond error:", error.message);
+    res.status(500).json({ error: "Failed to get response: " + error.message });
   }
 };
 
 // ─── POST /api/interview/end ──────────────────────────────────────────────
-const endInterview = async (req, res, next) => {
+const endInterview = async (req, res) => {
   try {
     const { sessionId } = req.body;
 
-    if (!sessionId) {
-      return res.status(400).json({ error: "sessionId is required" });
-    }
+    if (!sessionId) return res.status(400).json({ error: "sessionId is required" });
 
     const session = await Session.findOne({ _id: sessionId, user: req.user._id });
+    if (!session) return res.status(404).json({ error: "Session not found" });
 
-    if (!session) {
-      return res.status(404).json({ error: "Session not found" });
-    }
-
-    // Generate comprehensive feedback
     const transcriptText = session.transcript
       .map((t) => `${t.role === "user" ? "Candidate" : "Interviewer"}: ${t.content}`)
       .join("\n\n");
 
-    const feedbackCompletion = await openai.chat.completions.create({
-      model: "gpt-4o",
+    const feedbackCompletion = await groq.chat.completions.create({
+      model: "llama-3.3-70b-versatile",
       messages: [
         {
           role: "system",
-          content: `You are an expert interview coach. Analyze this interview transcript and provide structured feedback. 
-          Return your response as a valid JSON object with this exact structure:
-          {
-            "overallScore": <number 0-100>,
-            "communicationScore": <number 0-100>,
-            "technicalScore": <number 0-100>,
-            "behavioralScore": <number 0-100>,
-            "strengths": [<string>, <string>, <string>],
-            "improvements": [<string>, <string>, <string>],
-            "summary": "<2-3 sentence overall summary>"
-          }
-          Be honest, specific, and constructive.`,
+          content: `You are an expert interview coach. Analyze this interview transcript and provide structured feedback.
+Return ONLY a valid JSON object with this exact structure, no markdown, no extra text:
+{
+  "overallScore": <number 0-100>,
+  "communicationScore": <number 0-100>,
+  "technicalScore": <number 0-100>,
+  "behavioralScore": <number 0-100>,
+  "strengths": ["<string>", "<string>", "<string>"],
+  "improvements": ["<string>", "<string>", "<string>"],
+  "summary": "<2-3 sentence overall summary>"
+}`,
         },
         {
           role: "user",
@@ -210,13 +195,12 @@ const endInterview = async (req, res, next) => {
         communicationScore: 70,
         technicalScore: 70,
         behavioralScore: 70,
-        strengths: ["Completed the interview", "Engaged with questions"],
-        improvements: ["Practice more specific examples"],
-        summary: "Interview completed. Detailed analysis unavailable.",
+        strengths: ["Completed the interview", "Engaged with questions", "Showed willingness to learn"],
+        improvements: ["Practice more specific examples", "Structure answers with STAR method", "Be more concise"],
+        summary: "Interview completed successfully. Keep practicing to improve your performance.",
       };
     }
 
-    // Update session
     const endedAt = new Date();
     const durationMinutes = Math.round((endedAt - session.startedAt) / 60000);
 
@@ -228,46 +212,33 @@ const endInterview = async (req, res, next) => {
 
     res.json({ feedback, durationMinutes, totalQuestions: session.questionCount });
   } catch (error) {
-    next(error);
+    console.error("❌ End interview error:", error.message);
+    res.status(500).json({ error: "Failed to generate feedback: " + error.message });
   }
 };
 
 // ─── GET /api/interview/sessions ─────────────────────────────────────────
-const getSessions = async (req, res, next) => {
+const getSessions = async (req, res) => {
   try {
     const sessions = await Session.find({ user: req.user._id })
       .select("-transcript")
       .sort({ createdAt: -1 })
       .limit(20);
-
     res.json({ sessions });
   } catch (error) {
-    next(error);
+    res.status(500).json({ error: error.message });
   }
 };
 
 // ─── GET /api/interview/sessions/:id ─────────────────────────────────────
-const getSessionById = async (req, res, next) => {
+const getSessionById = async (req, res) => {
   try {
-    const session = await Session.findOne({
-      _id: req.params.id,
-      user: req.user._id,
-    });
-
-    if (!session) {
-      return res.status(404).json({ error: "Session not found" });
-    }
-
+    const session = await Session.findOne({ _id: req.params.id, user: req.user._id });
+    if (!session) return res.status(404).json({ error: "Session not found" });
     res.json({ session });
   } catch (error) {
-    next(error);
+    res.status(500).json({ error: error.message });
   }
 };
 
-module.exports = {
-  startInterview,
-  respondToInterview,
-  endInterview,
-  getSessions,
-  getSessionById,
-};
+module.exports = { startInterview, respondToInterview, endInterview, getSessions, getSessionById };
