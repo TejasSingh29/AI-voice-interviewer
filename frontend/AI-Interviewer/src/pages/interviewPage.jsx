@@ -139,10 +139,10 @@ export default function InterviewPage() {
 
   // ── Status UI helpers ─────────────────────────────────────────────────────
   const statusConfig = {
-    idle: { label: "Click mic to speak", color: "text-slate-400", bg: "bg-indigo-600 hover:bg-indigo-700" },
-    listening: { label: "Listening... click to stop", color: "text-red-400", bg: "bg-red-500 hover:bg-red-600" },
+    idle: { label: "Click mic to start speaking", color: "text-slate-400", bg: "bg-indigo-600 hover:bg-indigo-700" },
+    listening: { label: "🎤 Speaking... click STOP when done", color: "text-red-400", bg: "bg-red-500 hover:bg-red-600" },
     processing: { label: "AI is thinking...", color: "text-yellow-400", bg: "bg-slate-600 cursor-not-allowed" },
-    speaking: { label: "AI is speaking... click to interrupt", color: "text-indigo-400", bg: "bg-indigo-600 hover:bg-indigo-700" },
+    speaking: { label: "AI is speaking...", color: "text-indigo-400", bg: "bg-indigo-600 hover:bg-indigo-700" },
   };
 
   const cfg = statusConfig[status];

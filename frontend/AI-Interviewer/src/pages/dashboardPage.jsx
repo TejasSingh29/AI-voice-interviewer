@@ -41,11 +41,9 @@ export default function DashboardPage() {
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-brand-500 flex items-center justify-center">
-              <Mic className="w-4 h-4 text-white" />
-            </div>
+            <img src="/crip-logo.jpg" alt="Crip AI" className="w-9 h-9 rounded-xl object-cover" />
             <div>
-              <h1 className="font-semibold text-slate-100">VoicePrep AI</h1>
+              <h1 className="font-semibold text-slate-100">Crip AI</h1>
               <p className="text-xs text-slate-500">Welcome, {user?.name}</p>
             </div>
           </div>
