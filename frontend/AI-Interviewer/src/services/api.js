@@ -1,28 +1,24 @@
 import axios from "axios";
 
-// Use Vite proxy — requests to /api go through vite → backend:5000
-// Do NOT use full URL here, that causes CORS issues
+// Hardcoded Render backend URL as fallback
+// VITE_API_URL env var overrides this in local dev
+const baseURL = import.meta.env.VITE_API_URL || "https://ai-voice-interviewer-gzml.onrender.com/api";
+
 const api = axios.create({
-  baseURL: "/api",
-  timeout: 30000,
-  headers: {
-    "Content-Type": "application/json",
-  },
+  baseURL,
+  timeout: 60000, // 60s — Render free tier can be slow to wake up
+  headers: { "Content-Type": "application/json" },
 });
 
-// Attach JWT token to every request automatically
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem("token");
-    if (token) {
-      config.headers["Authorization"] = `Bearer ${token}`;
-    }
+    if (token) config.headers["Authorization"] = `Bearer ${token}`;
     return config;
   },
   (error) => Promise.reject(error)
 );
 
-// Handle auth errors globally
 api.interceptors.response.use(
   (response) => response,
   (error) => {
