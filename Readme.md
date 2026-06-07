@@ -9,7 +9,7 @@ Frontend (React + Vite)
    ↓ (voice input via Web Speech API / Whisper)
 Backend (Node + Express)
    ↓
-OpenAI GPT-4 (generate question/feedback)
+Groq API (LLaMA 3.3-70B) (generate question/feedback)
    ↓
 ElevenLabs TTS / Browser speechSynthesis
    ↓
@@ -23,7 +23,7 @@ MongoDB (persist sessions + transcripts)
 | Frontend | React 18, Vite, Tailwind CSS |
 | Backend | Node.js, Express |
 | STT | Web Speech API (free) / OpenAI Whisper API |
-| AI Brain | OpenAI GPT-4o |
+| AI Brain | Groq API (LLaMA 3.3-70B) |
 | TTS | ElevenLabs API / Browser speechSynthesis |
 | Database | MongoDB + Mongoose |
 | Auth | JWT |
@@ -98,7 +98,7 @@ VITE_USE_ELEVENLABS=true
 
 ## 🔑 API Keys Required
 
-1. **OpenAI** → https://platform.openai.com/api-keys
+1. **GrokAPI** → https://console.groq.com/keys
 2. **ElevenLabs** (optional, free tier available) → https://elevenlabs.io
 3. **MongoDB** → Local or https://mongodb.com/atlas (free tier)
 
@@ -118,7 +118,7 @@ VITE_USE_ELEVENLABS=true
 ## 🎯 Features
 
 - 🎤 Real-time voice recording with Web Speech API
-- 🤖 GPT-4o powered dynamic interview questions
+- 🤖 Groq API (LLaMA 3.3-70B) powered dynamic interview questions
 - 🔊 ElevenLabs voice synthesis (or browser fallback)
 - 💾 Full session persistence in MongoDB
 - 📊 Post-interview feedback & scoring
